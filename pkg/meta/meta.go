@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -935,6 +936,22 @@ func processAlterDistribution(ctx context.Context,
 		}
 
 		selectedDistribId := dsId
+
+		for _, relation := range stmt.Relations {
+			typedKey := slices.ContainsFunc(relation.DistributionKey, func(key spqrparser.DistributionKeyEntry) bool {
+				return key.ColumnType != ""
+			})
+			if !typedKey {
+				continue
+			}
+			distribution, err := mngr.GetDistribution(ctx, selectedDistribId)
+			if err != nil {
+				return nil, err
+			}
+			if err := distributions.CheckTypedRelationKey(distribution, relation); err != nil {
+				return nil, err
+			}
+		}
 
 		relsToAttach := rels
 		for _, relation := range stmt.Relations {

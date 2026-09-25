@@ -12,6 +12,10 @@ description: |
   specified distribution key. For composite sharding keys, specify multiple
   column names separated by commas in the DISTRIBUTION KEY clause.
 
+  A routing expression such as MURMUR [entity_type VARCHAR, entity_id
+  UINTEGER] hashes each typed column and then hashes the combined result.
+  Its column types need no HASH annotation.
+
   DETACH TABLE detaches a table from the distribution.
 
   ALTER TABLE DISTRIBUTION KEY replaces the entire distribution key of an
@@ -123,6 +127,7 @@ subcommands:
 
       where keys is a comma-separated list of column names
       (e.g., "col1, col2" for composite keys)
+      or a routing expression <hashFunction> [<column_name> <type>, ...]
       where hashFunction is one of: IDENTITY, MURMUR, CITY
     examples:
       - description: Single column sharding key
@@ -133,6 +138,10 @@ subcommands:
         code: |
           ALTER DISTRIBUTION ds2 ATTACH TABLE users 
            DISTRIBUTION KEY tenant_id, user_id;
+      - description: Combine typed columns into one hashed key
+        code: |
+          ALTER DISTRIBUTION ds1 ATTACH TABLE table1
+            DISTRIBUTION KEY MURMUR [entity_type VARCHAR, entity_id UINTEGER];
       - description: Composite key with hash function
         code: |
           ALTER DISTRIBUTION ds3 ATTACH TABLE events 
@@ -143,27 +152,37 @@ subcommands:
       This command is a shorthand for [ALTER DISTRIBUTION ATTACH TABLE](#alter-distribution-attach-table). It creates a table and attaches it to a distribution in a single statement.
       The `DISTRIBUTED` keyword is optional and has no effect on the behavior.
 
-      There are two syntax forms for specifying distribution keys:
+      There are three syntax forms for specifying distribution keys:
 
-      **Parenthesized syntax** — column names and optional hash functions are listed inside parentheses:
+      **Parenthesized syntax** — column names and optional hash functions are listed inside parentheses.
+
+      **Hash syntax** — a hash function is followed by one typed column in parentheses. The column type must correspond to the distribution column type, for example `INT` for `INTEGER HASH`.
     syntax: |
       CREATE [DISTRIBUTED] TABLE [schema.]<table_name> (<keys>)
         [IN <distribution_id> | FOR DISTRIBUTION <distribution_id>]
+      CREATE [DISTRIBUTED] TABLE [schema.]<table_name>
+        HASH [FUNCTION] <hashFunction> (<column_name> <type>)
+        [IN <distribution_id> | FOR DISTRIBUTION <distribution_id>]
+
+      where hashFunction is one of: MURMUR, CITY
+      where type is one of: INT, INTEGER, UINTEGER, VARCHAR, UUID
     notes:
       - "**DISTRIBUTION KEY syntax** — uses explicit `DISTRIBUTION KEY` clause: `CREATE [DISTRIBUTED] TABLE [schema.]<table_name> DISTRIBUTION KEY <keys> [IN <distribution_id> | FOR DISTRIBUTION <distribution_id>]`"
     examples:
       - description: Simple column with no hash function (uses default distribution)
         code: CREATE TABLE r (i);
       - description: Column with hash function
-        code: CREATE TABLE r (i HASH MURMUR);
+        code: CREATE TABLE r HASH MURMUR (i INT);
       - description: Attach to a specific distribution
         code: CREATE TABLE t (id) IN ds1;
       - description: Using FOR DISTRIBUTION syntax
-        code: CREATE DISTRIBUTED TABLE table1 (i HASH MURMUR) FOR DISTRIBUTION ds1;
+        code: |
+          CREATE DISTRIBUTED TABLE table1 HASH MURMUR (i INT)
+            FOR DISTRIBUTION ds1;
       - description: Composite key with multiple columns
         code: CREATE TABLE t3 (id HASH MURMUR, id2 HASH MURMUR) IN ds3;
       - description: Routing expression syntax for composite keys with typed columns
-        code: CREATE TABLE tr (MURMUR [id1 INT HASH, id2 VARCHAR HASH]);
+        code: CREATE TABLE tr (MURMUR [id1 UINTEGER, id2 VARCHAR]);
       - description: Schema-qualified table name
         code: CREATE DISTRIBUTED TABLE sh1.r (i) IN d;
       - description: DISTRIBUTION KEY syntax
@@ -202,7 +221,7 @@ subcommands:
       - description: Fix an expression-routing entry (RENAME DISTRIBUTION COLUMN cannot do this)
         code: | 
           ALTER DISTRIBUTION ds1 ALTER TABLE tr 
-            DISTRIBUTION KEY MURMUR [correct_id INT HASH, id2 VARCHAR HASH];
+            DISTRIBUTION KEY MURMUR [correct_id UINTEGER, id2 VARCHAR];
     warnings:
       - This command does not have well-defined behavior with concurrent read-write operations. Use it during setup or maintenance windows only.
 

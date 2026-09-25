@@ -244,7 +244,7 @@ func randomHex(n int) (string, error) {
 %token<str> LOCAL GLOBAL
 
 /* types */
-%token<str> VARCHAR INTEGER INT TYPES UUID TYPE
+%token<str> VARCHAR INTEGER INT TYPES UUID TYPE UINTEGER
 
 /* ICP */
 %token<str> CONTROL POINT
@@ -294,7 +294,7 @@ func randomHex(n int) (string, error) {
 %type<aiEntry> auto_increment_entry
 
 %type<str> opt_hash_function_clause hash_function_clause
-%type<str> hash_function_name
+%type<str> hash_function_name non_identity_hash_function_name
 
 %type<alter> alter_stmt create_distributed_relation_stmt
 %type<alter_distribution> distribution_alter_stmt
@@ -320,7 +320,7 @@ func randomHex(n int) (string, error) {
 %type<rollback> rollback_stmt
 
 %type<strlist> col_types_list opt_col_types any_id_list opt_on_shards
-%type<str> col_types_elem
+%type<str> col_types_elem hash_input_type
 %type<bool> opt_cascade
 %type<str> opt_default_shard
 %type<options> options opt_options alter_generic_options generic_option_list alter_generic_option_list
@@ -901,6 +901,9 @@ reserved_keyword:
 	{
 		$$ = $1
 	} | INTEGER
+	{
+		$$ = $1
+	} | UINTEGER
 	{
 		$$ = $1
 	} | INT
@@ -1584,6 +1587,11 @@ typed_col_ref:
 			Column: $1,
 			Type: $2,
 		}
+	} | any_id UINTEGER {
+		$$ = TypedColRef{
+			Column: $1,
+			Type: qdb.ColumnTypeUinteger,
+		}
 	}
 
 
@@ -1630,6 +1638,14 @@ distributed_relation_def:
 			DistributionKey: $5,
 			AutoIncrementEntries: $6,
 			IfNotExists: $2,
+		}
+	}
+	| table_or_relation opt_if_not_exists qualified_name HASH opt_function non_identity_hash_function_name TOPENBR any_id hash_input_type TCLOSEBR
+	{
+		$$ = &DistributedRelation{
+			Relation:        $3,
+			DistributionKey: []DistributionKeyEntry{{Column: $8, ColumnType: $9, HashFunction: $6}},
+			IfNotExists:     $2,
 		}
 	}
 
@@ -1949,6 +1965,19 @@ col_types_elem:
 		$$ = qdb.ColumnTypeUUIDHashed
 	}
 
+hash_input_type:
+	INTEGER {
+		$$ = qdb.ColumnTypeInteger
+	} | INT {
+		$$ = qdb.ColumnTypeInteger
+	} | UINTEGER {
+		$$ = qdb.ColumnTypeUinteger
+	} | VARCHAR {
+		$$ = qdb.ColumnTypeVarchar
+	} | UUID {
+		$$ = qdb.ColumnTypeUUID
+	}
+
 opt_default_shard:
 	DEFAULT SHARD any_id {
 		$$ = $3
@@ -1959,7 +1988,12 @@ opt_default_shard:
 hash_function_name:
 	IDENTITY {
 		$$ = "identity"
-	} | MURMUR {
+	} | non_identity_hash_function_name {
+		$$ = $1
+	}
+
+non_identity_hash_function_name:
+	MURMUR {
 		$$ = "murmur"
 	} | CITY {
 		$$ = "city"

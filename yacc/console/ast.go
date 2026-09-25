@@ -399,6 +399,7 @@ type TypedColRef struct {
 
 type DistributionKeyEntry struct {
 	Column       string
+	ColumnType   string
 	HashFunction string
 	Expr         []TypedColRef
 }

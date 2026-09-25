@@ -1444,6 +1444,86 @@ func TestAlter(t *testing.T) {
 		},
 
 		{
+			query: "CREATE RELATION r3 HASH murmur (i int);",
+			exp: &spqrparser.Alter{
+				Element: &spqrparser.AlterDistribution{
+					Distribution: &spqrparser.DistributionSelector{ID: "default"},
+					Element: &spqrparser.AttachRelation{
+						Relations: []*spqrparser.DistributedRelation{
+							{
+								Relation: &rfqn.RelationFQN{RelationName: "r3"},
+								DistributionKey: []spqrparser.DistributionKeyEntry{
+									{
+										Column:       "i",
+										ColumnType:   "integer",
+										HashFunction: "murmur",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: nil,
+		},
+
+		{
+			query: "CREATE DISTRIBUTED TABLE sh1.r HASH FUNCTION city (id uuid) FOR DISTRIBUTION ds1;",
+			exp: &spqrparser.Alter{
+				Element: &spqrparser.AlterDistribution{
+					Distribution: &spqrparser.DistributionSelector{ID: "ds1"},
+					Element: &spqrparser.AttachRelation{
+						Relations: []*spqrparser.DistributedRelation{
+							{
+								Relation: &rfqn.RelationFQN{RelationName: "r", SchemaName: "sh1"},
+								DistributionKey: []spqrparser.DistributionKeyEntry{
+									{
+										Column:       "id",
+										ColumnType:   "uuid",
+										HashFunction: "city",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: nil,
+		},
+
+		{
+			query: "ALTER DISTRIBUTION ds1 ATTACH RELATION table1 DISTRIBUTION KEY murmur [entity_type varchar, entity_id uinteger];",
+			exp: &spqrparser.Alter{
+				Element: &spqrparser.AlterDistribution{
+					Distribution: &spqrparser.DistributionSelector{ID: "ds1"},
+					Element: &spqrparser.AttachRelation{
+						Relations: []*spqrparser.DistributedRelation{
+							{
+								Relation: &rfqn.RelationFQN{RelationName: "table1"},
+								DistributionKey: []spqrparser.DistributionKeyEntry{
+									{
+										HashFunction: "murmur",
+										Expr: []spqrparser.TypedColRef{
+											{
+												Column: "entity_type",
+												Type:   "varchar",
+											},
+											{
+												Column: "entity_id",
+												Type:   "uinteger",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: nil,
+		},
+
+		{
 			query: "CREATE DISTRIBUTED RELATION 'ss' (uid HASH MURMUR) IN dd;",
 			exp: &spqrparser.Alter{
 				Element: &spqrparser.AlterDistribution{
@@ -1802,6 +1882,20 @@ func TestAlter(t *testing.T) {
 		assert.NoError(err, "query %s", tt.query)
 
 		assert.Equal(tt.exp, tmp[0], "query %s", tt.query)
+	}
+}
+
+func TestHashRelationSyntaxFail(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, query := range []string{
+		"CREATE RELATION r HASH identity (i int);",
+		"CREATE RELATION r HASH murmur (i);",
+		"CREATE RELATION r HASH murmur (i int HASH city);",
+	} {
+		_, err := spqrparser.Parse(query)
+
+		assert.Error(err, "query %s", query)
 	}
 }
 
@@ -3137,6 +3231,25 @@ func TestIdempotentDDLFlags(t *testing.T) {
 								Relation:        &rfqn.RelationFQN{RelationName: "t"},
 								DistributionKey: []spqrparser.DistributionKeyEntry{{Column: "id"}},
 								IfNotExists:     true,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			query: "CREATE RELATION IF NOT EXISTS t HASH murmur (id int)",
+			exp: &spqrparser.Alter{
+				Element: &spqrparser.AlterDistribution{
+					Distribution: &spqrparser.DistributionSelector{ID: "default"},
+					Element: &spqrparser.AttachRelation{
+						Relations: []*spqrparser.DistributedRelation{
+							{
+								Relation: &rfqn.RelationFQN{RelationName: "t"},
+								DistributionKey: []spqrparser.DistributionKeyEntry{
+									{Column: "id", ColumnType: "integer", HashFunction: "murmur"},
+								},
+								IfNotExists: true,
 							},
 						},
 					},

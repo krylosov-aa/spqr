@@ -1,0 +1,83 @@
+CREATE DISTRIBUTION ds1 COLUMN TYPES int hash;
+    add distribution    
+------------------------
+ distribution id -> ds1
+(1 row)
+
+CREATE RELATION r3 HASH murmur (i int);
+      attach table      
+------------------------
+ relation name   -> r3
+ distribution id -> ds1
+(2 rows)
+
+CREATE RELATION old_r3 (i HASH murmur);
+       attach table        
+---------------------------
+ relation name   -> old_r3
+ distribution id -> ds1
+(2 rows)
+
+ALTER DISTRIBUTION ds1 ATTACH RELATION table1
+  DISTRIBUTION KEY murmur [entity_type varchar, entity_id uinteger];
+       attach table        
+---------------------------
+ relation name   -> table1
+ distribution id -> ds1
+(2 rows)
+
+CREATE DISTRIBUTED RELATION app.hashed HASH FUNCTION city (i uinteger) IN ds1;
+         attach table          
+-------------------------------
+ relation name   -> app.hashed
+ distribution id -> ds1
+(2 rows)
+
+-- The column type must match the distribution column type.
+CREATE RELATION invalid HASH murmur (i varchar);
+ERROR:  column type varchar of relation invalid does not match type uinteger of distribution ds1
+CREATE DISTRIBUTION ds_text COLUMN TYPES varchar hash;
+      add distribution      
+----------------------------
+ distribution id -> ds_text
+(1 row)
+
+CREATE RELATION text_rel HASH murmur (s varchar) IN ds_text;
+        attach table         
+-----------------------------
+ relation name   -> text_rel
+ distribution id -> ds_text
+(2 rows)
+
+CREATE DISTRIBUTION ds_uuid COLUMN TYPES uuid hash;
+      add distribution      
+----------------------------
+ distribution id -> ds_uuid
+(1 row)
+
+CREATE RELATION uuid_rel HASH city (id uuid) FOR DISTRIBUTION ds_uuid;
+        attach table         
+-----------------------------
+ relation name   -> uuid_rel
+ distribution id -> ds_uuid
+(2 rows)
+
+SHOW RELATIONS;
+ relation_name | distribution_id | distribution_key | schema_name 
+---------------+-----------------+------------------+-------------
+ hashed        | ds1             | ("i", city)      | app
+ old_r3        | ds1             | ("i", murmur)    | public
+ r3            | ds1             | ("i", murmur)    | public
+ table1        | ds1             | ("", murmur)     | public
+ text_rel      | ds_text         | ("s", murmur)    | public
+ uuid_rel      | ds_uuid         | ("id", city)     | public
+(6 rows)
+
+DROP DISTRIBUTION ALL CASCADE;
+ distribution_id 
+-----------------
+ ds1
+ ds_text
+ ds_uuid
+(3 rows)
+
